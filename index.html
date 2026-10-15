@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>SG's Pet Controller</title>
+  <!-- QRCode.js Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace, -apple-system, sans-serif; }
+    body { background: #0b0f19; color: #f8fafc; padding: 16px; display: flex; flex-direction: column; align-items: center; -webkit-tap-highlight-color: transparent; }
+    
+    .screen-title { width: 100%; max-width: 400px; font-size: 1.5rem; font-weight: 800; color: #ffffff; letter-spacing: 1px; margin-top: 8px; }
+    .screen-subtitle { width: 100%; max-width: 400px; font-size: 0.8rem; color: #94a3b8; margin-bottom: 16px; line-height: 1.3; }
+    
+    .card { background: #161f2e; border-radius: 14px; padding: 18px; width: 100%; max-width: 400px; margin-bottom: 16px; border: 1px solid #263346; }
+    .card-title { font-size: 0.95rem; font-weight: bold; color: #f8fafc; letter-spacing: 0.8px; margin-bottom: 12px; text-transform: uppercase; }
+
+    /* Bluetooth Status Bar */
+    .status-bar { width: 100%; max-width: 400px; background: #161f2e; border: 1px solid #263346; border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .status-text { font-size: 0.8rem; font-weight: bold; color: #94a3b8; }
+    .btn-connect { background: #38bdf8; color: #0b0f19; border: none; padding: 8px 14px; border-radius: 8px; font-weight: bold; font-size: 0.8rem; cursor: pointer; }
+    .btn-connect:active { transform: scale(0.96); }
+
+    /* Grid for Face Expressions */
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+    .face-btn { background: #0b0f19; border: 1px solid #263346; color: #f8fafc; padding: 12px 4px; border-radius: 8px; font-size: 0.8rem; font-weight: bold; cursor: pointer; text-align: center; }
+    .face-btn:active { background: #263346; color: #38bdf8; }
+
+    /* Section Mode Tabs */
+    .tab-bar { display: flex; background: #0b0f19; border-radius: 10px; padding: 4px; gap: 4px; margin-bottom: 14px; border: 1px solid #263346; }
+    .tab-btn { flex: 1; padding: 8px 4px; text-align: center; background: transparent; border: none; color: #94a3b8; font-size: 0.75rem; font-weight: bold; border-radius: 8px; cursor: pointer; }
+    .tab-btn.active { background: #263346; color: #38bdf8; }
+
+    /* Live OLED Canvas Preview */
+    .preview-box { width: 100%; background: #000000; border: 1.5px solid #475569; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 14px; }
+    canvas#oledPreview { background: #000; border: 1px solid #263346; width: 100%; height: auto; image-rendering: pixelated; }
+
+    /* Inputs */
+    textarea, input[type="text"] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #263346; background: #0b0f19; color: #ffffff; font-size: 0.85rem; margin-bottom: 6px; resize: none; font-family: inherit; }
+    textarea:focus, input[type="text"]:focus { outline: none; border-color: #38bdf8; }
+    .char-counter { font-size: 0.75rem; color: #64748b; text-align: right; margin-bottom: 12px; display: flex; justify-content: space-between; }
+
+    /* Duration Chips (Matching Screenshot) */
+    .section-label { font-size: 0.75rem; font-weight: bold; color: #94a3b8; margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .chips-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+    .chip { background: #0b0f19; border: 1px solid #263346; color: #f8fafc; padding: 10px 0; text-align: center; border-radius: 8px; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: 0.15s; }
+    .chip.active { background: #ffffff; color: #0b0f19; border-color: #ffffff; }
+
+    /* Send Button */
+    .btn-send { background: #ffffff; color: #0b0f19; border: none; padding: 12px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: 0.2s; }
+    .btn-send:active { transform: scale(0.98); background: #cbd5e1; }
+
+    input[type="file"] { width: 100%; color: #94a3b8; font-size: 0.8rem; margin-bottom: 12px; }
+
+    #qrcode-temp { display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="screen-title">SG's Pet</div>
+  <div class="screen-subtitle">ESP32-C3 Animated Companion Remote</div>
+
+  <!-- Bluetooth Connection Bar -->
+  <div class="status-bar">
+    <div class="status-text" id="statusText">STATUS: Offline</div>
+    <button class="btn-connect" onclick="connectBLE()" id="connBtn">Connect BLE</button>
+  </div>
+
+  <!-- Expression Control Card -->
+  <div class="card">
+    <div class="card-title">Expression Selection</div>
+    <div class="grid-3">
+      <button class="face-btn" onclick="sendMood(0)">Hollow</button>
+      <button class="face-btn" onclick="sendMood(1)">Happy</button>
+      <button class="face-btn" onclick="sendMood(2)">Surprised</button>
+      <button class="face-btn" onclick="sendMood(3)">Sleepy</button>
+      <button class="face-btn" onclick="sendMood(4)">Angry</button>
+      <button class="face-btn" onclick="sendMood(5)">Sad</button>
+      <button class="face-btn" onclick="sendMood(6)">Waving Hi</button>
+      <button class="face-btn" onclick="sendMood(7)">Love</button>
+      <button class="face-btn" onclick="sendMood(8)">Suspicious</button>
+    </div>
+  </div>
+
+  <!-- OLED Messages & Media Composer Card -->
+  <div class="card">
+    <div class="card-title">OLED Message Composer</div>
+
+    <!-- Mode Selector Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabText" onclick="switchTab('text')">Text Banner</button>
+      <button class="tab-btn" id="tabQR" onclick="switchTab('qr')">Social QR</button>
+      <button class="tab-btn" id="tabPhoto" onclick="switchTab('photo')">Photo Upload</button>
+    </div>
+
+    <!-- Live OLED Canvas Preview -->
+    <div class="preview-box">
+      <canvas id="oledPreview" width="128" height="64"></canvas>
+    </div>
+
+    <!-- SECTION 1: TEXT MESSAGES -->
+    <div id="sectionText">
+      <textarea id="msgInput" rows="2" placeholder="Type message for SG's Pet..." maxlength="60" oninput="updateTextPreview()"></textarea>
+      <div class="char-counter">
+        <span>Payload limit: 60 chars</span>
+        <span id="charCount">0/60</span>
+      </div>
+    </div>
+
+    <!-- SECTION 2: SOCIAL QR CODE -->
+    <div id="sectionQR" style="display: none;">
+      <input type="text" id="qrLabelInput" placeholder="Label (e.g. @saigo)" value="@saigo" oninput="updateQRPreview()">
+      <input type="text" id="qrUrlInput" placeholder="URL (e.g. https://instagram.com)" value="https://instagram.com" oninput="updateQRPreview()">
+    </div>
+
+    <!-- SECTION 3: PHOTO UPLOAD -->
+    <div id="sectionPhoto" style="display: none;">
+      <input type="file" id="photoInput" accept="image/*" onchange="processPhotoUpload(event)">
+    </div>
+
+    <!-- DISPLAY DURATION CHIPS -->
+    <div class="section-label">Display Duration</div>
+    <div class="chips-grid">
+      <div class="chip active" onclick="selectDuration(0, this)">1 Time</div>
+      <div class="chip" onclick="selectDuration(2, this)">5s</div>
+      <div class="chip" onclick="selectDuration(3, this)">10s</div>
+      <div class="chip" onclick="selectDuration(1, this)">Always</div>
+    </div>
+
+    <!-- SEND BUTTON -->
+    <button class="btn-send" onclick="sendToOLED()">➤ Send to Screen</button>
+  </div>
+
+  <!-- Hidden Container for QRCode Generator Engine -->
+  <div id="qrcode-temp"></div>
+
+  <script>
+    const SERVICE_UUID = "4fa1c000-1c4a-43fe-8ce6-a9600f28a30f";
+    const CHAR_MOOD    = "4fa1c001-1c4a-43fe-8ce6-a9600f28a30f";
+    const CHAR_TEXT    = "4fa1c002-1c4a-43fe-8ce6-a9600f28a30f";
+    const CHAR_DRAW    = "4fa1c003-1c4a-43fe-8ce6-a9600f28a30f";
+
+    let gattServer, moodChar, textChar, drawChar;
+    let selectedMode = 'text'; // 'text', 'qr', 'photo'
+    let selectedDurationMode = 0; // 0=1 Time, 1=Always, 2=5s, 3=10s
+
+    const canvas = document.getElementById("oledPreview");
+    const ctx = canvas.getContext("2d");
+
+    clearPreview();
+
+    function clearPreview() {
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, 128, 64);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "10px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("[ OLED PREVIEW ]", 64, 36);
+    }
+
+    // Bluetooth Scanner (Lenient Mode for Mobile Compatibility)
+    async function connectBLE() {
+      try {
+        document.getElementById("statusText").innerText = "STATUS: Scanning...";
+        document.getElementById("statusText").style.color = "#38bdf8";
+
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [SERVICE_UUID]
+        });
+
+        document.getElementById("statusText").innerText = "STATUS: Connecting...";
+        gattServer = await device.gatt.connect();
+        const service = await gattServer.getPrimaryService(SERVICE_UUID);
+
+        moodChar = await service.getCharacteristic(CHAR_MOOD);
+        textChar = await service.getCharacteristic(CHAR_TEXT);
+        drawChar = await service.getCharacteristic(CHAR_DRAW);
+
+        document.getElementById("statusText").innerText = "STATUS: Connected";
+        document.getElementById("statusText").style.color = "#4ade80";
+        document.getElementById("connBtn").innerText = "Connected";
+      } catch (err) {
+        console.error(err);
+        document.getElementById("statusText").innerText = "STATUS: Failed";
+        document.getElementById("statusText").style.color = "#f87171";
+      }
+    }
+
+    async function sendMood(index) {
+      if (!moodChar) return alert("Connect Bluetooth first!");
+      await moodChar.writeValue(new Uint8Array([index]));
+    }
+
+    function switchTab(mode) {
+      selectedMode = mode;
+      document.getElementById("tabText").classList.toggle("active", mode === 'text');
+      document.getElementById("tabQR").classList.toggle("active", mode === 'qr');
+      document.getElementById("tabPhoto").classList.toggle("active", mode === 'photo');
+
+      document.getElementById("sectionText").style.display = mode === 'text' ? 'block' : 'none';
+      document.getElementById("sectionQR").style.display = mode === 'qr' ? 'block' : 'none';
+      document.getElementById("sectionPhoto").style.display = mode === 'photo' ? 'block' : 'none';
+
+      if (mode === 'text') updateTextPreview();
+      else if (mode === 'qr') updateQRPreview();
+      else clearPreview();
+    }
+
+    function selectDuration(modeValue, el) {
+      selectedDurationMode = modeValue;
+      document.querySelectorAll('.chips-grid .chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    function updateTextPreview() {
+      const text = document.getElementById("msgInput").value;
+      document.getElementById("charCount").innerText = `${text.length}/60`;
+
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, 128, 64);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 18px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(text || "SG's Pet", 64, 40);
+    }
+
+    function updateQRPreview() {
+      const label = document.getElementById("qrLabelInput").value;
+      const url = document.getElementById("qrUrlInput").value || "https://instagram.com";
+
+      const tempContainer = document.getElementById("qrcode-temp");
+      tempContainer.innerHTML = "";
+
+      new QRCode(tempContainer, {
+        text: url, width: 56, height: 56,
+        colorDark : "#000000", colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.M
+      });
+
+      setTimeout(() => {
+        const qrImg = tempContainer.querySelector("img");
+        if (!qrImg) return;
+
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(0, 0, 128, 64);
+        ctx.drawImage(qrImg, 4, 4, 56, 56);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "left";
+        ctx.font = "bold 9px monospace";
+        ctx.fillText(label.substring(0, 11), 66, 28);
+        ctx.font = "7px sans-serif";
+        ctx.fillText("SCAN ME", 66, 42);
+      }, 100);
+    }
+
+    function processPhotoUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+          ctx.fillStyle = "#000000";
+          ctx.fillRect(0, 0, 128, 64);
+          ctx.drawImage(img, 0, 0, 128, 64);
+
+          const imgData = ctx.getImageData(0, 0, 128, 64);
+          for (let i = 0; i < imgData.data.length; i += 4) {
+            const avg = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+            const mono = avg > 120 ? 255 : 0;
+            imgData.data[i] = mono;
+            imgData.data[i+1] = mono;
+            imgData.data[i+2] = mono;
+          }
+          ctx.putImageData(imgData, 0, 0);
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function sendToOLED() {
+      if (selectedMode === 'text') {
+        if (!textChar) return alert("Connect Bluetooth first!");
+        const text = document.getElementById("msgInput").value;
+        const encoder = new TextEncoder();
+        const textBytes = encoder.encode(text);
+
+        const payload = new Uint8Array(1 + textBytes.length);
+        payload[0] = selectedDurationMode;
+        payload.set(textBytes, 1);
+
+        await textChar.writeValue(payload);
+      } else {
+        if (!drawChar) return alert("Connect Bluetooth first!");
+        const imgData = ctx.getImageData(0, 0, 128, 64).data;
+        const buffer = new Uint8Array(1024);
+
+        for (let y = 0; y < 64; y++) {
+          for (let x = 0; x < 128; x++) {
+            const idx = (y * 128 + x) * 4;
+            if (imgData[idx] > 100) {
+              const byteIdx = y * 16 + Math.floor(x / 8);
+              buffer[byteIdx] |= (1 << (7 - (x % 8)));
+            }
+          }
+        }
+
+        for (let chunk = 0; chunk < 8; chunk++) {
+          const payload = new Uint8Array(129);
+          payload[0] = chunk;
+          payload.set(buffer.subarray(chunk * 128, (chunk + 1) * 128), 1);
+          await drawChar.writeValue(payload);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
